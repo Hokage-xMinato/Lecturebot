@@ -26,6 +26,13 @@ pyro = Client("studysmarter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BO
 # Dictionary to store user-specific data during the input collection process
 user_data = {}
 
+# List of allowed user IDs (admins)
+# Add your user IDs here, separated by commas.
+ADMINS = [
+    6853245084,  # Replace with the user ID of the admin
+    # Add more admin user IDs here
+]
+
 # A dictionary to store channel/group and topic information.
 # The keys are the display names, and the values are a tuple:
 # (chat_id, topic_id_or_none)
@@ -38,7 +45,30 @@ DESTINATIONS = {
     "Test Topic": (-1002143525251, 10),
 }
 
+def is_admin(func):
+    """
+    Decorator to check if the user is an admin.
+    """
+    async def wrapper(client, message, *args, **kwargs):
+        if message.from_user and message.from_user.id in ADMINS:
+            return await func(client, message, *args, **kwargs)
+        else:
+            await message.reply("❌ You are not authorized to use this bot.")
+    return wrapper
+
+def is_admin_callback(func):
+    """
+    Decorator for callback queries to check if the user is an admin.
+    """
+    async def wrapper(client, callback_query, *args, **kwargs):
+        if callback_query.from_user and callback_query.from_user.id in ADMINS:
+            return await func(client, callback_query, *args, **kwargs)
+        else:
+            await callback_query.answer("❌ You are not authorized to use this bot.", show_alert=True)
+    return wrapper
+
 @pyro.on_message(filters.command("start"))
+@is_admin
 async def start(client, message):
     """
     Handles the /start command. Greets the user and provides instructions.
@@ -46,6 +76,7 @@ async def start(client, message):
     await message.reply("🎓 Welcome to the Study Smarter Bot!\n\nJust send a lesson link like:\n<code>https://theeduverse.xyz/play?lessonurl=...</code>", parse_mode=ParseMode.HTML)
 
 @pyro.on_message(filters.regex(r"theeduverse\.xyz/play\?lessonurl="))
+@is_admin
 async def handle_link(client, message):
     """
     Handles messages containing the specific lesson URL pattern.
@@ -76,6 +107,7 @@ async def handle_link(client, message):
         await message.reply(f"❌ Error parsing link: {e}. Please ensure the link is correct and try again.")
 
 @pyro.on_message(filters.text & filters.private & ~filters.command("done"))
+@is_admin
 async def collect_inputs(client, message: Message):
     """
     Collects additional information (Title, Date, Notes) from the user
@@ -139,6 +171,7 @@ async def send_final_message_to_user(client, message, data):
     )
 
 @pyro.on_message(filters.command("done"))
+@is_admin
 async def done_command_handler(client, message):
     """
     Handles the /done command to initiate the channel/topic selection process.
@@ -152,6 +185,7 @@ async def done_command_handler(client, message):
     await message.reply("Please select where you want to send this lecture block:", reply_markup=markup)
 
 @pyro.on_callback_query()
+@is_admin_callback
 async def send_to_channel_handler(client, callback_query: CallbackQuery):
     """
     Handles button clicks for selecting the destination channel/topic.
@@ -196,7 +230,6 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
 
     try:
         # Send the message to the selected channel/group/topic.
-        # This bot acts as the "other bot" you mentioned, sending the final message.
         await client.send_message(
             chat_id=chat_id,
             text=full_text,
