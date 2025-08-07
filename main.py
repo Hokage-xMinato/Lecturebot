@@ -1,12 +1,10 @@
 import asyncio
 import threading
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
-from pyrogram.enums import ParseMode # Import ParseMode enum
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
+from pyrogram.enums import ParseMode
 from urllib.parse import unquote, urlparse, parse_qs, quote
-# Ensure 'config' module is correctly set up with API_ID, API_HASH, BOT_TOKEN
 from config import API_ID, API_HASH, BOT_TOKEN
-
 from flask import Flask
 
 # Initialize Flask app
@@ -26,8 +24,19 @@ def index():
 pyro = Client("studysmarter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # Dictionary to store user-specific data during the input collection process
-# Each user's data will include flags to track input collection state.
 user_data = {}
+
+# A dictionary to store channel/group and topic information.
+# The keys are the display names, and the values are a tuple:
+# (chat_id, topic_id_or_none)
+# For the main channel without topics, the topic_id can be None.
+# For a group with topics, the topic_id is the unique ID for that topic.
+DESTINATIONS = {
+    "SSC": (-1002143525251, 6),
+    "Maths Channel": (-1001234567890, None),
+    "Physics Group": (-1009876543210, None),
+    "Test Topic": (-1002143525251, 10),
+}
 
 @pyro.on_message(filters.command("start"))
 async def start(client, message):
@@ -40,144 +49,171 @@ async def start(client, message):
 async def handle_link(client, message):
     """
     Handles messages containing the specific lesson URL pattern.
-    Extracts the lesson URL, validates it, and initiates the data collection process.
     """
     user_id = message.from_user.id
     try:
         url = message.text
         parsed = urlparse(url)
         query = parse_qs(parsed.query)
-        lesson_url = unquote(query.get("lessonurl", [""])[0]) # Extract and unquote the lessonurl
+        lesson_url = unquote(query.get("lessonurl", [""])[0])
 
-        # Validate if the lesson URL is an M3U8 link
         if not lesson_url.endswith(".m3u8"):
             return await message.reply("❌ Invalid M3U8 link. Please ensure the lesson URL ends with .m3u8.")
 
-        # Construct the final player link
         final_link = f"https://studysmarterx.netlify.app/player?url={quote(lesson_url)}"
 
-        # Store initial data for the user, including state flags
         user_data[user_id] = {
             "link": final_link,
             "title": "",
             "date": "",
             "notes": "",
-            "title_collected": False, # Flag to track if title input has been processed
-            "date_collected": False,  # Flag to track if date input has been processed
-            "notes_collected": False  # Flag to track if notes input has been processed
+            "title_collected": False,
+            "date_collected": False,
+            "notes_collected": False
         }
         await message.reply("✅ Link processed successfully!\nNow, please send the <b>Title</b> for this lecture, or type /empty to skip.", parse_mode=ParseMode.HTML)
     except Exception as e:
-        # Catch any errors during URL parsing or processing
         await message.reply(f"❌ Error parsing link: {e}. Please ensure the link is correct and try again.")
 
-@pyro.on_message(filters.text & filters.private)
+@pyro.on_message(filters.text & filters.private & ~filters.command("done"))
 async def collect_inputs(client, message: Message):
     """
     Collects additional information (Title, Date, Notes) from the user
     in a conversational flow using state flags.
     """
     user_id = message.from_user.id
-    # Check if the user is in the data collection state
     if user_id not in user_data:
-        return # Ignore messages if no active data collection session
+        return
 
     state = user_data[user_id]
-    user_input = message.text.strip() # Get user input and strip whitespace
+    user_input = message.text.strip()
 
-    # State 1: Collecting Title
     if not state["title_collected"]:
-        if user_input == "/empty":
-            state["title"] = "" # Explicitly set to empty string if skipped
-        else:
-            state["title"] = user_input
-        state["title_collected"] = True # Mark title as processed for this session
+        state["title"] = user_input if user_input != "/empty" else ""
+        state["title_collected"] = True
         await message.reply("📅 Great! Now, please send the <b>Date</b> of the lecture (e.g., '2023-10-26'), or type /empty to skip.", parse_mode=ParseMode.HTML)
-        return # Important: return after processing one state to wait for next input
+        return
 
-    # State 2: Collecting Date
     if not state["date_collected"]:
-        if user_input == "/empty":
-            state["date"] = "" # Explicitly set to empty string if skipped
-        else:
-            state["date"] = user_input
-        state["date_collected"] = True # Mark date as processed for this session
+        state["date"] = user_input if user_input != "/empty" else ""
+        state["date_collected"] = True
         await message.reply("📝 Almost there! Now, please send the <b>Notes link</b> (if any), or type /empty to skip.", parse_mode=ParseMode.HTML)
-        return # Important: return after processing one state
+        return
 
-    # State 3: Collecting Notes
     if not state["notes_collected"]:
-        if user_input == "/empty":
-            state["notes"] = "" # Explicitly set to empty string if skipped
-        else:
-            state["notes"] = user_input
-        state["notes_collected"] = True # Mark notes as processed for this session
+        state["notes"] = user_input if user_input != "/empty" else ""
+        state["notes_collected"] = True
 
-        # All inputs collected, send the final formatted message
-        await send_final_message(client, message, state)
-        del user_data[user_id] # Clear user data after completion
-        return # Important: return after final processing
+        await send_final_message_to_user(client, message, state)
+        await message.reply("Lecture block created successfully. Reply /done to share this block in a group or channel.")
+        return
 
-async def send_final_message(client, message, data):
+async def send_final_message_to_user(client, message, data):
     """
-    Constructs and sends the final message with lecture link and notes,
-    including inline keyboard buttons.
+    Constructs and sends the final message with lecture link and notes
+    to the user who created the block.
     """
-    # Prepare message components, only include if data is present
     title = f"<b>📌 {data['title']}</b>\n" if data['title'] else ""
     date = f"🗓️ {data['date']}\n" if data['date'] else ""
     body = "🔗 Lecture and notes available below.\n\n"
     footer = "Provided by @studysmarterhub — share us for more!"
-
     full_text = f"{title}{date}{body}{footer}"
 
-    # Define inline keyboard buttons
     buttons = [
-        [InlineKeyboardButton("▶️ Watch Lecture", url=data["link"])] # Button to watch the lecture
+        [InlineKeyboardButton("▶️ Watch Lecture", url=data["link"])]
     ]
-    # Add 'View Notes' button only if notes is a non-empty string and starts with "http"
     if data["notes"] and data["notes"].startswith("http"):
         buttons.append([InlineKeyboardButton("📝 View Notes", url=data["notes"])])
 
-    # Define the specific promotional text to be shared
     promotional_text = "Access the aarambh batch free at @aarambh_batch_10th Join our backup at @studysmarterhub"
-    # URL-encode the promotional text
     encoded_promotional_text = quote(promotional_text)
-
-    # Add 'Share' button to directly share the promotional text via tg://msg
-    buttons.append([
-        InlineKeyboardButton("🔗 Share", url=f"tg://msg?text={encoded_promotional_text}")
-    ])
+    buttons.append([InlineKeyboardButton("🔗 Share", url=f"tg://msg?text={encoded_promotional_text}")])
 
     markup = InlineKeyboardMarkup(buttons)
 
-    # Send the final message
     await message.reply(
         full_text,
-        parse_mode=ParseMode.HTML, # Use ParseMode.HTML for HTML formatting
-        disable_web_page_preview=True, # Prevent Telegram from generating a web page preview
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
         reply_markup=markup
     )
 
-# The inline_query_handler is no longer needed for the "Share" button
-# as it now directly uses tg://msg for sharing the promotional text.
-# If you have other inline query needs, you can re-add it.
-# @pyro.on_inline_query()
-# async def inline_query_handler(client, inline_query):
-#     if inline_query.query == "share_aarambh":
-#         await inline_query.answer(
-#             results=[
-#                 client.types.InlineQueryResultArticle(
-#                     title="Share Aarambh Batch",
-#                     input_message_content=client.types.InputTextMessageContent(
-#                         "Access the aarambh batch free at @aarambh_batch_10th Join our backup at @studysmarterhub"
-#                     ),
-#                     description="Click to share this promotional message.",
-#                     thumb_url="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg"
-#                 )
-#             ],
-#             cache_time=1
-#         )
+@pyro.on_message(filters.command("done"))
+async def done_command_handler(client, message):
+    """
+    Handles the /done command to initiate the channel/topic selection process.
+    """
+    user_id = message.from_user.id
+    if user_id not in user_data or not user_data[user_id].get("notes_collected"):
+        return await message.reply("You need to create a lecture block first. Send a lesson link to begin.")
+
+    buttons = [[InlineKeyboardButton(name, callback_data=f"send_to:{name}")] for name in DESTINATIONS]
+    markup = InlineKeyboardMarkup(buttons)
+    await message.reply("Please select where you want to send this lecture block:", reply_markup=markup)
+
+@pyro.on_callback_query()
+async def send_to_channel_handler(client, callback_query: CallbackQuery):
+    """
+    Handles button clicks for selecting the destination channel/topic.
+    """
+    data = callback_query.data
+    if not data.startswith("send_to:"):
+        await callback_query.answer("Invalid action.")
+        return
+
+    user_id = callback_query.from_user.id
+    if user_id not in user_data or not user_data[user_id].get("notes_collected"):
+        await callback_query.answer("Session expired. Please start over.", show_alert=True)
+        return
+
+    destination_name = data.split(":")[1]
+    destination = DESTINATIONS.get(destination_name)
+
+    if not destination:
+        await callback_query.answer("Destination not found.", show_alert=True)
+        return
+
+    chat_id, topic_id = destination
+    lecture_data = user_data[user_id]
+
+    title = f"<b>📌 {lecture_data['title']}</b>\n" if lecture_data['title'] else ""
+    date = f"🗓️ {lecture_data['date']}\n" if lecture_data['date'] else ""
+    body = "🔗 Lecture and notes available below.\n\n"
+    footer = "Provided by @studysmarterhub — share us for more!"
+    full_text = f"{title}{date}{body}{footer}"
+
+    buttons = [
+        [InlineKeyboardButton("▶️ Watch Lecture", url=lecture_data["link"])]
+    ]
+    if lecture_data["notes"] and lecture_data["notes"].startswith("http"):
+        buttons.append([InlineKeyboardButton("📝 View Notes", url=lecture_data["notes"])])
+
+    promotional_text = "Access the aarambh batch free at @aarambh_batch_10th Join our backup at @studysmarterhub"
+    encoded_promotional_text = quote(promotional_text)
+    buttons.append([InlineKeyboardButton("🔗 Share", url=f"tg://msg?text={encoded_promotional_text}")])
+
+    markup = InlineKeyboardMarkup(buttons)
+
+    try:
+        # Send the message to the selected channel/group/topic.
+        # This bot acts as the "other bot" you mentioned, sending the final message.
+        await client.send_message(
+            chat_id=chat_id,
+            text=full_text,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+            reply_markup=markup,
+            message_thread_id=topic_id if topic_id else None
+        )
+        await callback_query.answer(f"Sent to {destination_name} successfully!", show_alert=True)
+        await callback_query.message.edit_text(f"✅ The lecture has been sent to **{destination_name}**.")
+    except Exception as e:
+        await callback_query.answer(f"Failed to send message: {e}", show_alert=True)
+        await callback_query.message.edit_text("❌ An error occurred while sending the message. Please ensure the bot is an admin in the destination channel/group.")
+
+    # Finally, clear the user's data after the message has been sent.
+    if user_id in user_data:
+        del user_data[user_id]
 
 # ---- Thread to run Flask alongside bot ----
 def run_flask():
@@ -190,8 +226,7 @@ if __name__ == "__main__":
     # Start the Flask app in a separate thread
     flask_thread = threading.Thread(target=run_flask, name="FlaskThread")
     flask_thread.start()
-
+    
     # Run the Pyrogram bot in the main thread.
-    # This ensures signal handling works correctly.
     print("Starting Pyrogram bot in the main thread...")
     pyro.run()
