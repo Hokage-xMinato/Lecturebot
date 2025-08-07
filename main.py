@@ -139,9 +139,14 @@ async def send_final_message(client, message, data):
     if data["notes"] and data["notes"].startswith("http"):
         buttons.append([InlineKeyboardButton("📝 View Notes", url=data["notes"])])
 
-    # Add 'Share' button to trigger an inline query for the promotional text
+    # Define the specific promotional text to be shared
+    promotional_text = "Access the aarambh batch free at @aarambh_batch_10th Join our backup at @studysmarterhub"
+    # URL-encode the promotional text
+    encoded_promotional_text = quote(promotional_text)
+
+    # Add 'Share' button to directly share the promotional text via tg://msg
     buttons.append([
-        InlineKeyboardButton("🔗 Share", switch_inline_query="share_aarambh")
+        InlineKeyboardButton("🔗 Share", url=f"tg://msg?text={encoded_promotional_text}")
     ])
 
     markup = InlineKeyboardMarkup(buttons)
@@ -154,26 +159,25 @@ async def send_final_message(client, message, data):
         reply_markup=markup
     )
 
-@pyro.on_inline_query()
-async def inline_query_handler(client, inline_query):
-    """
-    Handles inline queries, specifically for sharing bot information.
-    This is now used to share the specific promotional text for Aarambh batch.
-    """
-    if inline_query.query == "share_aarambh":
-        await inline_query.answer(
-            results=[
-                client.types.InlineQueryResultArticle(
-                    title="Share Aarambh Batch",
-                    input_message_content=client.types.InputTextMessageContent(
-                        "Access the aarambh batch free at @aarambh_batch_10th Join our backup at @studysmarterhub"
-                    ),
-                    description="Click to share this promotional message.",
-                    thumb_url="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" # Telegram logo for the thumbnail
-                )
-            ],
-            cache_time=1 # Cache the result for 1 second
-        )
+# The inline_query_handler is no longer needed for the "Share" button
+# as it now directly uses tg://msg for sharing the promotional text.
+# If you have other inline query needs, you can re-add it.
+# @pyro.on_inline_query()
+# async def inline_query_handler(client, inline_query):
+#     if inline_query.query == "share_aarambh":
+#         await inline_query.answer(
+#             results=[
+#                 client.types.InlineQueryResultArticle(
+#                     title="Share Aarambh Batch",
+#                     input_message_content=client.types.InputTextMessageContent(
+#                         "Access the aarambh batch free at @aarambh_batch_10th Join our backup at @studysmarterhub"
+#                     ),
+#                     description="Click to share this promotional message.",
+#                     thumb_url="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg"
+#                 )
+#             ],
+#             cache_time=1
+#         )
 
 # ---- Thread to run Flask alongside bot ----
 def run_flask():
