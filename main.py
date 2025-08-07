@@ -2,6 +2,7 @@ import asyncio
 import threading
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
+from pyrogram.enums import ParseMode # Import ParseMode enum
 from urllib.parse import unquote, urlparse, parse_qs, quote
 # Ensure 'config' module is correctly set up with API_ID, API_HASH, BOT_TOKEN
 from config import API_ID, API_HASH, BOT_TOKEN
@@ -32,7 +33,7 @@ async def start(client, message):
     """
     Handles the /start command. Greets the user and provides instructions.
     """
-    await message.reply("🎓 Welcome to the Study Smarter Bot!\n\nJust send a lesson link like:\n<code>https://theeduverse.xyz/play?lessonurl=...</code>", parse_mode="html")
+    await message.reply("🎓 Welcome to the Study Smarter Bot!\n\nJust send a lesson link like:\n<code>https://theeduverse.xyz/play?lessonurl=...</code>", parse_mode=ParseMode.HTML)
 
 @pyro.on_message(filters.regex(r"theeduverse\.xyz/play\?lessonurl="))
 async def handle_link(client, message):
@@ -61,7 +62,7 @@ async def handle_link(client, message):
             "date": "",
             "notes": ""
         }
-        await message.reply("✅ Link processed successfully!\nNow, please send the <b>Title</b> for this lecture, or type /empty to skip.", parse_mode="html")
+        await message.reply("✅ Link processed successfully!\nNow, please send the <b>Title</b> for this lecture, or type /empty to skip.", parse_mode=ParseMode.HTML)
     except Exception as e:
         # Catch any errors during URL parsing or processing
         await message.reply(f"❌ Error parsing link: {e}. Please ensure the link is correct and try again.")
@@ -83,14 +84,14 @@ async def collect_inputs(client, message: Message):
     if not state["title"]:
         if message.text != "/empty":
             state["title"] = message.text.strip() # Store the title, removing leading/trailing whitespace
-        await message.reply("📅 Great! Now, please send the <b>Date</b> of the lecture (e.g., '2023-10-26'), or type /empty to skip.", parse_mode="html")
+        await message.reply("📅 Great! Now, please send the <b>Date</b> of the lecture (e.g., '2023-10-26'), or type /empty to skip.", parse_mode=ParseMode.HTML)
         return
 
     # Collect Date
     if not state["date"]:
         if message.text != "/empty":
             state["date"] = message.text.strip() # Store the date
-        await message.reply("📝 Almost there! Now, please send the <b>Notes link</b> (if any), or type /empty to skip.", parse_mode="html")
+        await message.reply("📝 Almost there! Now, please send the <b>Notes link</b> (if any), or type /empty to skip.", parse_mode=ParseMode.HTML)
         return
 
     # Collect Notes
@@ -133,7 +134,7 @@ async def send_final_message(client, message, data):
     # Send the final message
     await message.reply(
         full_text,
-        parse_mode="html",
+        parse_mode=ParseMode.HTML, # Use ParseMode.HTML
         disable_web_page_preview=True, # Prevent Telegram from generating a web page preview
         reply_markup=markup
     )
