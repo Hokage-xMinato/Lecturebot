@@ -26,6 +26,7 @@ def index():
 pyro = Client("studysmarter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # Dictionary to store user-specific data during the input collection process
+# Each user's data will include flags to track input collection state.
 user_data = {}
 
 @pyro.on_message(filters.command("start"))
@@ -55,12 +56,15 @@ async def handle_link(client, message):
         # Construct the final player link
         final_link = f"https://studysmarterx.netlify.app/player?url={quote(lesson_url)}"
 
-        # Store initial data for the user
+        # Store initial data for the user, including state flags
         user_data[user_id] = {
             "link": final_link,
             "title": "",
             "date": "",
-            "notes": ""
+            "notes": "",
+            "title_collected": False, # Flag to track if title input has been processed
+            "date_collected": False,  # Flag to track if date input has been processed
+            "notes_collected": False  # Flag to track if notes input has been processed
         }
         await message.reply("✅ Link processed successfully!\nNow, please send the <b>Title</b> for this lecture, or type /empty to skip.", parse_mode=ParseMode.HTML)
     except Exception as e:
@@ -71,7 +75,7 @@ async def handle_link(client, message):
 async def collect_inputs(client, message: Message):
     """
     Collects additional information (Title, Date, Notes) from the user
-    in a conversational flow.
+    in a conversational flow using state flags.
     """
     user_id = message.from_user.id
     # Check if the user is in the data collection state
@@ -79,29 +83,40 @@ async def collect_inputs(client, message: Message):
         return # Ignore messages if no active data collection session
 
     state = user_data[user_id]
+    user_input = message.text.strip() # Get user input and strip whitespace
 
-    # Collect Title
-    if not state["title"]:
-        if message.text != "/empty":
-            state["title"] = message.text.strip() # Store the title, removing leading/trailing whitespace
+    # State 1: Collecting Title
+    if not state["title_collected"]:
+        if user_input == "/empty":
+            state["title"] = "" # Explicitly set to empty string if skipped
+        else:
+            state["title"] = user_input
+        state["title_collected"] = True # Mark title as processed for this session
         await message.reply("📅 Great! Now, please send the <b>Date</b> of the lecture (e.g., '2023-10-26'), or type /empty to skip.", parse_mode=ParseMode.HTML)
-        return
+        return # Important: return after processing one state to wait for next input
 
-    # Collect Date
-    if not state["date"]:
-        if message.text != "/empty":
-            state["date"] = message.text.strip() # Store the date
+    # State 2: Collecting Date
+    if not state["date_collected"]:
+        if user_input == "/empty":
+            state["date"] = "" # Explicitly set to empty string if skipped
+        else:
+            state["date"] = user_input
+        state["date_collected"] = True # Mark date as processed for this session
         await message.reply("📝 Almost there! Now, please send the <b>Notes link</b> (if any), or type /empty to skip.", parse_mode=ParseMode.HTML)
-        return
+        return # Important: return after processing one state
 
-    # Collect Notes
-    if not state["notes"]:
-        if message.text != "/empty":
-            state["notes"] = message.text.strip() # Store the notes link
+    # State 3: Collecting Notes
+    if not state["notes_collected"]:
+        if user_input == "/empty":
+            state["notes"] = "" # Explicitly set to empty string if skipped
+        else:
+            state["notes"] = user_input
+        state["notes_collected"] = True # Mark notes as processed for this session
 
         # All inputs collected, send the final formatted message
         await send_final_message(client, message, state)
         del user_data[user_id] # Clear user data after completion
+        return # Important: return after final processing
 
 async def send_final_message(client, message, data):
     """
@@ -120,11 +135,11 @@ async def send_final_message(client, message, data):
     buttons = [
         [InlineKeyboardButton("▶️ Watch Lecture", url=data["link"])] # Button to watch the lecture
     ]
-    # Add 'View Notes' button only if notes is a valid URL
-    if data["notes"].startswith("http"):
+    # Add 'View Notes' button only if notes is a non-empty string and starts with "http"
+    if data["notes"] and data["notes"].startswith("http"):
         buttons.append([InlineKeyboardButton("📝 View Notes", url=data["notes"])])
 
-    # Add 'Share' button to trigger an inline query
+    # Add 'Share' button to trigger an inline query for the promotional text
     buttons.append([
         InlineKeyboardButton("🔗 Share", switch_inline_query="share_aarambh")
     ])
@@ -134,7 +149,7 @@ async def send_final_message(client, message, data):
     # Send the final message
     await message.reply(
         full_text,
-        parse_mode=ParseMode.HTML, # Use ParseMode.HTML
+        parse_mode=ParseMode.HTML, # Use ParseMode.HTML for HTML formatting
         disable_web_page_preview=True, # Prevent Telegram from generating a web page preview
         reply_markup=markup
     )
@@ -143,6 +158,7 @@ async def send_final_message(client, message, data):
 async def inline_query_handler(client, inline_query):
     """
     Handles inline queries, specifically for sharing bot information.
+    This is now used to share the specific promotional text for Aarambh batch.
     """
     if inline_query.query == "share_aarambh":
         await inline_query.answer(
@@ -150,9 +166,9 @@ async def inline_query_handler(client, inline_query):
                 client.types.InlineQueryResultArticle(
                     title="Share Aarambh Batch",
                     input_message_content=client.types.InputTextMessageContent(
-                        "📢 Join us for Aarambh batch at @aarambh_batch_10th\nand our backup at @studysmarterhub."
+                        "Access the aarambh batch free at @aarambh_batch_10th Join our backup at @studysmarterhub"
                     ),
-                    description="Click to share this message about the Aarambh Batch.",
+                    description="Click to share this promotional message.",
                     thumb_url="https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg" # Telegram logo for the thumbnail
                 )
             ],
