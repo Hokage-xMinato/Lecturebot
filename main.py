@@ -158,24 +158,19 @@ async def inline_query_handler(client, inline_query):
             cache_time=1 # Cache the result for 1 second
         )
 
-# ---- Thread to run bot alongside Flask ----
-def run_bot():
+# ---- Thread to run Flask alongside bot ----
+def run_flask():
     """
-    Function to run the Pyrogram bot in a separate thread.
-    Crucially, it creates and sets a new asyncio event loop for this thread.
+    Function to run the Flask app in a separate thread.
     """
-    # Create a new event loop for this thread
-    loop = asyncio.new_event_loop()
-    # Set the newly created loop as the current event loop for this thread
-    asyncio.set_event_loop(loop)
-    # Now, run the Pyrogram client in this thread with its own event loop
-    pyro.run()
+    app_flask.run(host="0.0.0.0", port=10000)
 
 if __name__ == "__main__":
-    # Start the bot in a separate thread
-    bot_thread = threading.Thread(target=run_bot, name="PyrogramBotThread")
-    bot_thread.start()
+    # Start the Flask app in a separate thread
+    flask_thread = threading.Thread(target=run_flask, name="FlaskThread")
+    flask_thread.start()
 
-    # Run the Flask app in the main thread.
-    # Render (and similar platforms) expects the main process to listen on a port.
-    app_flask.run(host="0.0.0.0", port=10000)
+    # Run the Pyrogram bot in the main thread.
+    # This ensures signal handling works correctly.
+    print("Starting Pyrogram bot in the main thread...")
+    pyro.run()
