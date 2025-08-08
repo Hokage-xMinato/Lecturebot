@@ -250,7 +250,7 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
         if topic_id:
             send_args["reply_to_message_id"] = topic_id
             if ANONYMOUS_POSTING:
-                send_args["as_anon"] = True
+                send_args["send_as_chat"] = True
                 
         # Send the message using the prepared arguments
         await client.send_message(**send_args)
