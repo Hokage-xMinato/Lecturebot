@@ -210,6 +210,7 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
     chat_id, topic_id = destination
     lecture_data = user_data[user_id]
 
+    # --- Start of Unchanged Message Formatting ---
     title = f"<b>📌 {lecture_data['title']}</b>\n" if lecture_data['title'] else ""
     date = f"🗓️ {lecture_data['date']}\n" if lecture_data['date'] else ""
     body = "🔗 Lecture and notes available below.\n\n"
@@ -227,22 +228,41 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
     buttons.append([InlineKeyboardButton("🔗 Share", url=f"tg://msg?text={encoded_promotional_text}")])
 
     markup = InlineKeyboardMarkup(buttons)
+    # --- End of Unchanged Message Formatting ---
 
+    #
+    # >>>>> THIS IS THE CORRECTED CODE BLOCK <<<<<
+    #
     try:
-        # Send the message to the selected channel/group/topic.
-        await client.send_message(
-            chat_id=chat_id,
-            text=full_text,
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True,
-            reply_markup=markup,
-            message_thread_id=topic_id if topic_id else None
-        )
+        # Prepare the common arguments for sending the message
+        send_args = {
+            "chat_id": chat_id,
+            "text": full_text,
+            "parse_mode": ParseMode.HTML,
+            "disable_web_page_preview": True,
+            "reply_markup": markup
+        }
+
+        # Only add the message_thread_id if we are sending to a topic
+        if topic_id:
+            send_args["message_thread_id"] = topic_id
+        
+        # Send the message using the prepared arguments
+        await client.send_message(**send_args)
+
         await callback_query.answer(f"Sent to {destination_name} successfully!", show_alert=True)
         await callback_query.message.edit_text(f"✅ The lecture has been sent to **{destination_name}**.")
+
     except Exception as e:
-        await callback_query.answer(f"Failed to send message: {e}", show_alert=True)
-        await callback_query.message.edit_text("❌ An error occurred while sending the message. Please ensure the bot is an admin in the destination channel/group.")
+        # This will now show the REAL error, like the 'unexpected keyword' one
+        error_message = str(e)
+        await callback_query.answer(f"Failed to send: {error_message}", show_alert=True)
+        await callback_query.message.edit_text(
+            f"❌ An error occurred while sending the message to **{destination_name}**.\n\n"
+            f"**Error:** `{error_message}`\n\n"
+            "Please ensure the bot is an admin in the destination and that your Pyrogram version is up-to-date."
+        )
+    # >>>>> END OF CORRECTED CODE BLOCK <<<<<
 
     # Finally, clear the user's data after the message has been sent.
     if user_id in user_data:
