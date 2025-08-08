@@ -39,8 +39,8 @@ ADMINS = [
 # For the main channel without topics, the topic_id can be None.
 # For a group with topics, the topic_id is the unique ID for that topic.
 DESTINATIONS = {
-    "SSC": (-1002637860051, 8),
-    "Prarambh Channel": (-1002637860051, None),
+    "SSC": (-1002584962735, 8),
+    "Maths Channel": (-1002637860051, None),
     "Physics Group": (-1009876543210, None),
     "Test Topic": (-1002143525251, 10),
 }
