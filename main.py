@@ -29,7 +29,7 @@ user_data = {}
 # List of allowed user IDs (admins)
 # Add your user IDs here, separated by commas.
 ADMINS = [
-    5199423758,  # Replace with the user ID of the admin
+    5199423758, # Replace with the user ID of the admin
     # Add more admin user IDs here
 ]
 
@@ -235,14 +235,14 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
     markup = InlineKeyboardMarkup(buttons)
     # --- End of Unchanged Message Formatting ---
     try:
-    await client.send_message(
-        chat_id=chat_id,
-        text="TEST MESSAGE - PLEASE IGNORE",
-        parse_mode=ParseMode.HTML
-    )
-    await callback_query.answer("✅ Test message sent!", show_alert=True)
-except Exception as e:
-    await callback_query.answer(f"❌ Test failed: {str(e)}", show_alert=True)
+        await client.send_message(
+            chat_id=chat_id,
+            text="TEST MESSAGE - PLEASE IGNORE",
+            parse_mode=ParseMode.HTML
+        )
+        await callback_query.answer("✅ Test message sent!", show_alert=True)
+    except Exception as e:
+        await callback_query.answer(f"❌ Test failed: {str(e)}", show_alert=True)
     
     
     # Finally, clear the user's data after the message has been sent.
