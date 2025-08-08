@@ -228,7 +228,7 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
     if lecture_data["notes"] and lecture_data["notes"].startswith("http"):
         buttons.append([InlineKeyboardButton("📝 View Notes", url=lecture_data["notes"])])
 
-    promotional_text = "Access the aarambh batch free at @aarambh_batch_10th Join our backup at @studysmarterhub"
+    promotional_text = "Access the aarambh batch free at @aarambh_batch_10th. Join our backup channel at @studysmarterhub"
     encoded_promotional_text = quote(promotional_text)
     buttons.append([InlineKeyboardButton("🔗 Share", url=f"tg://msg?text={encoded_promotional_text}")])
 
@@ -248,7 +248,7 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
 
         # Only add the message_thread_id if we are sending to a topic
         if topic_id:
-            send_args["message_thread_id"] = topic_id
+            send_args["reply_to_message_id"] = topic_id
             if ANONYMOUS_POSTING:
                 send_args["as_anon"] = True
                 
