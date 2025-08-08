@@ -19,13 +19,11 @@ def index():
 pyro = Client("studysmarter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # --- Configuration ---
-# For better practice, move these to your config.py file
-ADMINS = [5199423758]  # Your admin user IDs
+ADMINS = [5199423758] 
 DESTINATIONS = {
-    # Make sure these IDs are correct!
-    "SSC": (-1002584962735, 8),  # (group_chat_id, topic_id)
-    "Maths Channel": (-1002637860051, None), # (channel_chat_id, None)
-    "Test Topic": (-1002143525251, 10), # (group_chat_id, topic_id)
+    "SSC": (-1002584962735, 8),
+    "Maths Channel": (-1002637860051, None),
+    "Test Topic": (-1002143525251, 10),
 }
 # --- End Configuration ---
 
@@ -77,7 +75,7 @@ async def handle_link(client, message):
             "link": final_link,
             "title": "", "date": "", "notes": "",
             "title_collected": False, "date_collected": False, "notes_collected": False,
-            "final_text": "", "final_markup": None # For storing the final message
+            "final_text": "", "final_markup": None
         }
         await message.reply("✅ Link processed! Now send the **Title**.\n(Send /empty to skip)", parse_mode=ParseMode.HTML)
     except Exception as e:
@@ -109,7 +107,6 @@ async def collect_inputs(client, message: Message):
         state["notes"] = user_input if user_input != "/empty" else ""
         state["notes_collected"] = True
 
-        # --- BUILD THE MESSAGE ONCE ---
         title = f"<b>📌 {state['title']}</b>\n" if state['title'] else ""
         date = f"🗓️ {state['date']}\n" if state['date'] else ""
         text = f"{title}{date}\n🔗 Lecture and notes are linked below.\n\n<b>Provided by @studysmarterhub</b>"
@@ -124,14 +121,10 @@ async def collect_inputs(client, message: Message):
         
         markup = InlineKeyboardMarkup(buttons)
 
-        # Store the final text and markup
         state["final_text"] = text
         state["final_markup"] = markup
         
-        # Show the preview to the admin
-        await message.reply(
-            "✅ **Preview of your post:**"
-        )
+        await message.reply("✅ **Preview of your post:**")
         await message.reply(
             text=state["final_text"],
             reply_markup=state["final_markup"],
@@ -159,44 +152,50 @@ async def send_to_destination(client, callback_query: CallbackQuery):
         chat_id, topic_id = DESTINATIONS[destination_name]
         data = user_data[user_id]
         
-        # --- SEND THE PRE-BUILT MESSAGE ---
-        # The `message_thread_id` parameter is ignored if it's None, so this works for both cases.
-        await client.send_message(
-            chat_id=chat_id,
-            message_thread_id=topic_id,
-            text=data["final_text"],
-            reply_markup=data["final_markup"],
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True
-        )
+        # ### THIS IS THE CORRECTED LOGIC ###
+        if topic_id:
+            # Destination IS a topic, so we use message_thread_id
+            await client.send_message(
+                chat_id=chat_id,
+                message_thread_id=topic_id,
+                text=data["final_text"],
+                reply_markup=data["final_markup"],
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True
+            )
+        else:
+            # Destination is a regular channel/group, so we DON'T use message_thread_id
+            await client.send_message(
+                chat_id=chat_id,
+                text=data["final_text"],
+                reply_markup=data["final_markup"],
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True
+            )
         
         await callback_query.answer(f"✅ Successfully posted to {destination_name}!", show_alert=True)
         await callback_query.message.edit_text(f"✅ Message sent to **{destination_name}**.")
 
     except RPCError as e:
-        # This will catch errors from Telegram (e.g., bot not in chat, wrong topic id)
         await callback_query.answer(f"❌ Telegram API Error: {e}", show_alert=True)
         await callback_query.message.edit_text(
             f"❗️**Failed to send to {destination_name}**\n\n"
             f"**Error:** `{e}`\n\n"
             "**Please Check:**\n"
             "1. Is the bot an **admin** in the destination chat?\n"
-            "2. Does the bot have permission to **send messages** (and post in topics)?\n"
-            "3. Is the **Topic ID** (`{topic_id}`) correct and does the topic still exist?"
+            "2. Does it have permission to **send messages**?\n"
+            "3. Is the **Topic ID** correct?"
         )
     except Exception as e:
-        # This will catch any other error (e.g., KeyError if data is missing)
         await callback_query.answer(f"❌ A bot error occurred: {e}", show_alert=True)
         await callback_query.message.edit_text(f"❗️**An unexpected error occurred:**\n\n`{e}`")
         
     finally:
-        # Clean up user data to allow for a new post
         if user_id in user_data:
             del user_data[user_id]
 
 # --- Flask and Bot Execution ---
 def run_flask():
-    # Runs the Flask app in a separate thread
     app_flask.run(host="0.0.0.0", port=10000, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
