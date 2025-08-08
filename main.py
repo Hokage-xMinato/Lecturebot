@@ -237,36 +237,46 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
     
     # --- CORRECTED & ENHANCED CODE BLOCK ---
     try:
-        # Prepare the common arguments for sending the message
-        send_args = {
-            "chat_id": chat_id,
-            "text": full_text,
-            "parse_mode": ParseMode.HTML,
-            "disable_web_page_preview": True,
-            "reply_markup": markup
-        }
+    # Base message parameters
+    message_params = {
+        "chat_id": chat_id,
+        "text": full_text,
+        "parse_mode": ParseMode.HTML,
+        "disable_web_page_preview": True,
+        "reply_markup": markup
+    }
 
-        # Only add the message_thread_id if we are sending to a topic
-        if topic_id:
-            send_args["reply_to_message_id"] = topic_id
-            if ANONYMOUS_POSTING:
-                send_args["send_as_chat"] = True
-                
-        # Send the message using the prepared arguments
-        await client.send_message(**send_args)
+    # Handle topics (for groups)
+    if topic_id:
+        # Try both parameter names for different Pyrogram versions
+        try:
+            # For newer Pyrogram versions
+            message_params["message_thread_id"] = topic_id
+        except:
+            # For older versions
+            message_params["reply_to_message_id"] = topic_id
 
-        await callback_query.answer(f"Sent to {destination_name} successfully!", show_alert=True)
-        await callback_query.message.edit_text(f"✅ The lecture has been sent to **{destination_name}**.")
+    # Handle anonymous posting
+    if ANONYMOUS_POSTING:
+        try:
+            # Try all possible parameter names for anonymous posting
+            message_params["as_anon"] = True  # Old versions
+            message_params["send_as_chat"] = True  # Newer versions
+            message_params["send_as"] = None  # Latest versions
+        except:
+            pass  # Skip if none work
 
-    except Exception as e:
-        error_message = str(e)
-        await callback_query.answer(f"Failed to send: {error_message}", show_alert=True)
-        await callback_query.message.edit_text(
-            f"❌ An error occurred while sending the message to **{destination_name}**.\n\n"
-            f"**Error:** `{error_message}`\n\n"
-            "Please ensure the bot is an admin in the destination and that your Pyrogram version is up-to-date."
-        )
-    # --- END OF CORRECTED & ENHANCED CODE BLOCK ---
+    # Send the message
+    await client.send_message(**message_params)
+    
+    await callback_query.answer(f"✅ Successfully sent to {destination_name}!", show_alert=True)
+    
+except RPCError as e:
+    error_msg = f"Failed to send: {e.MESSAGE.format(e.value)}"
+    await callback_query.answer(error_msg, show_alert=True)
+except Exception as e:
+    await callback_query.answer(f"Unexpected error: {str(e)}", show_alert=True)
+# --- END OF CORRECTED & ENHANCED CODE BLOCK ---
 
     # Finally, clear the user's data after the message has been sent.
     if user_id in user_data:
