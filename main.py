@@ -234,50 +234,17 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
 
     markup = InlineKeyboardMarkup(buttons)
     # --- End of Unchanged Message Formatting ---
-    
-    # --- CORRECTED & ENHANCED CODE BLOCK ---
     try:
-    # Base message parameters
-    message_params = {
-        "chat_id": chat_id,
-        "text": full_text,
-        "parse_mode": ParseMode.HTML,
-        "disable_web_page_preview": True,
-        "reply_markup": markup
-    }
-
-    # Handle topics (for groups)
-    if topic_id:
-        # Try both parameter names for different Pyrogram versions
-        try:
-            # For newer Pyrogram versions
-            message_params["message_thread_id"] = topic_id
-        except:
-            # For older versions
-            message_params["reply_to_message_id"] = topic_id
-
-    # Handle anonymous posting
-    if ANONYMOUS_POSTING:
-        try:
-            # Try all possible parameter names for anonymous posting
-            message_params["as_anon"] = True  # Old versions
-            message_params["send_as_chat"] = True  # Newer versions
-            message_params["send_as"] = None  # Latest versions
-        except:
-            pass  # Skip if none work
-
-    # Send the message
-    await client.send_message(**message_params)
-    
-    await callback_query.answer(f"✅ Successfully sent to {destination_name}!", show_alert=True)
-    
-except RPCError as e:
-    error_msg = f"Failed to send: {e.MESSAGE.format(e.value)}"
-    await callback_query.answer(error_msg, show_alert=True)
+    await client.send_message(
+        chat_id=chat_id,
+        text="TEST MESSAGE - PLEASE IGNORE",
+        parse_mode=ParseMode.HTML
+    )
+    await callback_query.answer("✅ Test message sent!", show_alert=True)
 except Exception as e:
-    await callback_query.answer(f"Unexpected error: {str(e)}", show_alert=True)
-# --- END OF CORRECTED & ENHANCED CODE BLOCK ---
-
+    await callback_query.answer(f"❌ Test failed: {str(e)}", show_alert=True)
+    
+    
     # Finally, clear the user's data after the message has been sent.
     if user_id in user_data:
         del user_data[user_id]
