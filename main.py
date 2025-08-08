@@ -45,6 +45,11 @@ DESTINATIONS = {
     "Test Topic": (-1002143525251, 10),
 }
 
+# --- New Configuration for Anonymous Posting ---
+# Set to True to post messages anonymously in topics.
+# This requires the bot to have "Post Anonymously" admin rights.
+ANONYMOUS_POSTING = True
+
 def is_admin(func):
     """
     Decorator to check if the user is an admin.
@@ -106,7 +111,7 @@ async def handle_link(client, message):
     except Exception as e:
         await message.reply(f"❌ Error parsing link: {e}. Please ensure the link is correct and try again.")
 
-@pyro.on_message(filters.text & filters.private & ~filters.command("done"))
+@pyro.on_message(filters.text & filters.private & ~filters.command("done") & ~filters.command("start"))
 @is_admin
 async def collect_inputs(client, message: Message):
     """
@@ -229,10 +234,8 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
 
     markup = InlineKeyboardMarkup(buttons)
     # --- End of Unchanged Message Formatting ---
-
-    #
-    # >>>>> THIS IS THE CORRECTED CODE BLOCK <<<<<
-    #
+    
+    # --- CORRECTED & ENHANCED CODE BLOCK ---
     try:
         # Prepare the common arguments for sending the message
         send_args = {
@@ -243,10 +246,12 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
             "reply_markup": markup
         }
 
-        # Only add the message_thread_id if we are sending to a topic
+        # Handle anonymous posting for topics
         if topic_id:
             send_args["message_thread_id"] = topic_id
-        
+            if ANONYMOUS_POSTING:
+                send_args["as_anon"] = True
+                
         # Send the message using the prepared arguments
         await client.send_message(**send_args)
 
@@ -254,7 +259,6 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
         await callback_query.message.edit_text(f"✅ The lecture has been sent to **{destination_name}**.")
 
     except Exception as e:
-        # This will now show the REAL error, like the 'unexpected keyword' one
         error_message = str(e)
         await callback_query.answer(f"Failed to send: {error_message}", show_alert=True)
         await callback_query.message.edit_text(
@@ -262,7 +266,7 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
             f"**Error:** `{error_message}`\n\n"
             "Please ensure the bot is an admin in the destination and that your Pyrogram version is up-to-date."
         )
-    # >>>>> END OF CORRECTED CODE BLOCK <<<<<
+    # --- END OF CORRECTED & ENHANCED CODE BLOCK ---
 
     # Finally, clear the user's data after the message has been sent.
     if user_id in user_data:
