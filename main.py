@@ -246,7 +246,7 @@ async def send_to_channel_handler(client, callback_query: CallbackQuery):
             "reply_markup": markup
         }
 
-        # Handle anonymous posting for topics
+        # Only add the message_thread_id if we are sending to a topic
         if topic_id:
             send_args["message_thread_id"] = topic_id
             if ANONYMOUS_POSTING:
