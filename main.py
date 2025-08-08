@@ -39,7 +39,7 @@ ADMINS = [
 # For the main channel without topics, the topic_id can be None.
 # For a group with topics, the topic_id is the unique ID for that topic.
 DESTINATIONS = {
-    "SSC": (-1002584962735, 8),
+    "SSC": (-1002637860051, 8),
     "Prarambh Channel": (-1002637860051, None),
     "Physics Group": (-1009876543210, None),
     "Test Topic": (-1002143525251, 10),
@@ -73,7 +73,7 @@ async def start(client, message):
     """
     Handles the /start command. Greets the user and provides instructions.
     """
-    await message.reply("🎓 Welcome to the Study Smarter Bot!\n\nJust send a lesson link like:\n<code>https://theeduverse.xyz/play?lessonurl=...</code>", parse_mode=ParseMode.HTML)
+    await message.reply("🎓 Welcome to the Study Smarter Bot!\n\nJust send a lesson link like:\n<code>https://theeduverse.xyz/play?lessonurl=...m3u8</code>", parse_mode=ParseMode.HTML)
 
 @pyro.on_message(filters.regex(r"theeduverse\.xyz/play\?lessonurl="))
 @is_admin
