@@ -1,3 +1,4 @@
+import asyncio
 import threading
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
@@ -20,7 +21,7 @@ pyro = Client("studysmarter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BO
 # --- Configuration ---
 ADMINS = [5199423758]
 DESTINATIONS = {
-    "SSC": (-1002584962735, 4971),           # Updated topic_id for SSC topic
+    "SSC": (-1002584962735, 8),
     "Maths Channel": (-1002637860051, None),
     "Test Topic": (-1002143525251, 10),
 }
@@ -54,12 +55,11 @@ async def start(client, message):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# Case-insensitive play URL detection
-@pyro.on_message(filters.regex(r"theeduverse\.xyz/[Pp]lay\?lessonurl="))
+@pyro.on_message(filters.regex(r"theeduverse\.xyz/play\?lessonurl="))
 @is_admin
 async def handle_link(client, message):
     try:
-        url = message.text.strip()
+        url = message.text
         parsed = urlparse(url)
         query = parse_qs(parsed.query)
         lesson_url = unquote(query.get("lessonurl", [""])[0])
@@ -107,20 +107,19 @@ async def collect_inputs(client, message: Message):
         title = f"<b>📌 {state['title']}</b>\n" if state['title'] else ""
         date = f"🗓️ {state['date']}\n" if state['date'] else ""
         text = f"{title}{date}\n🔗 Lecture and notes are linked below.\n\n<b>Provided by @studysmarterhub</b>"
-
+        
         buttons = [[InlineKeyboardButton("▶️ Watch Lecture", url=state["link"])]]
         if state["notes"] and state["notes"].startswith("http"):
             buttons.append([InlineKeyboardButton("📝 View Notes", url=state["notes"])])
-
-        # Better promotional message
-        promo_text = quote("🎓 Study smarter with Aarambh Batch! 🚀 Join @aarambh_batch_10th | Backup: @studysmarterhub")
+        
+        promo_text = quote("Access @aarambh_batch_10th | Backup @studysmarterhub")
         buttons.append([InlineKeyboardButton("🔗 Share this Post", url=f"https://t.me/share/url?url={promo_text}")])
-
+        
         markup = InlineKeyboardMarkup(buttons)
 
         state["final_text"] = text
         state["final_markup"] = markup
-
+        
         await message.reply("✅ **Preview of your post:**")
         await message.reply(
             text=state["final_text"],
@@ -143,12 +142,14 @@ async def done_command(client, message):
 @pyro.on_callback_query(filters.regex(r"^send_to:"))
 @is_admin_callback
 async def send_to_destination(client, callback_query: CallbackQuery):
+    """Sends the final message to the selected destination channel/topic."""
     user_id = callback_query.from_user.id
     try:
         destination_name = callback_query.data.split(":", 1)[1]
         chat_id, topic_id = DESTINATIONS[destination_name]
         data = user_data[user_id]
 
+        # Prepare common kwargs
         send_kwargs = dict(
             chat_id=chat_id,
             text=data["final_text"],
@@ -157,21 +158,13 @@ async def send_to_destination(client, callback_query: CallbackQuery):
             disable_web_page_preview=True
         )
 
-        # Only add message_thread_id if valid topic_id (int) is provided
-        if topic_id and isinstance(topic_id, int):
+        # Only add message_thread_id if supported by current Pyrogram version
+        if topic_id and "message_thread_id" in Client.send_message.__code__.co_varnames:
             send_kwargs["message_thread_id"] = topic_id
 
-        try:
-            await client.send_message(**send_kwargs)
-        except TypeError as e:
-            # In case message_thread_id is invalid for this chat (e.g. channel), retry without it
-            if "message_thread_id" in send_kwargs:
-                send_kwargs.pop("message_thread_id", None)
-                await client.send_message(**send_kwargs)
-            else:
-                raise e
-
-        await callback_query.answer(f"✅ Posted to {destination_name}!", show_alert=True)
+        await client.send_message(**send_kwargs)
+        
+        await callback_query.answer(f"✅ Successfully posted to {destination_name}!", show_alert=True)
         await callback_query.message.edit_text(f"✅ Message sent to **{destination_name}**.")
 
     except RPCError as e:
@@ -185,10 +178,11 @@ async def send_to_destination(client, callback_query: CallbackQuery):
             "3. Is the **Chat ID** and **Topic ID** correct?"
         )
     except Exception as e:
-        await callback_query.answer(f"❌ Bot error: {e}", show_alert=True)
+        await callback_query.answer(f"❌ A bot error occurred: {e}", show_alert=True)
         await callback_query.message.edit_text(f"❗️**An unexpected error occurred:**\n\n`{e}`")
     finally:
-        user_data.pop(user_id, None)
+        if user_id in user_data:
+            del user_data[user_id]
 
 # --- Flask and Bot Execution ---
 def run_flask():
@@ -198,6 +192,6 @@ if __name__ == "__main__":
     print("Starting Flask web server in a background thread...")
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
-
+    
     print("Starting Pyrogram bot...")
     pyro.run()
