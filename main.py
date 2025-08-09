@@ -18,7 +18,7 @@ def index():
     return "✅ Bot is running!"
 
 # Initialize Pyrogram Client
-pyro = Client("studysmarter_bot", api_id=API_id, api_hash=API_HASH, bot_token=BOT_TOKEN)
+pyro = Client("studysmarter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # --- Configuration ---
 ADMINS = [5199423758] # Replace with your actual admin user IDs
