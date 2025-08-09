@@ -21,10 +21,15 @@ pyro = Client("studysmarter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BO
 
 # --- Configuration ---
 ADMINS = [5199423758] # Replace with your actual admin user IDs
+
+# DESTINATIONS now include (chat_id, topic_id, reply_to_message_id)
+# Set reply_to_message_id to None if not needed for a destination.
 DESTINATIONS = {
-    "SSC": (-1002584962735, 8),
-    "Maths Channel": (-1002637860051, None),
-    "Test Topic": (-1002143525251, 10),
+    "SSC": (-1002584962735, 8, None), # Example: Topic 8, no specific reply message
+    "Maths Channel": (-1002637860051, None, None), # Example: No topic, no specific reply
+    "Test Topic": (-1002143525251, 10, None), # Example: Topic 10, no specific reply
+    # NEW EXAMPLE: To reply to message 6768 in topic 8 of chat -1002584962735
+    "Aarambh Batch Reply": (-1002584962735, 8, 6768),
 }
 # --- End Configuration ---
 
@@ -147,7 +152,9 @@ async def send_to_destination(client, callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
     try:
         destination_name = callback_query.data.split(":", 1)[1]
-        chat_id, topic_id = DESTINATIONS[destination_name]
+        
+        # Unpack the tuple with three elements
+        chat_id, topic_id, reply_to_message_id = DESTINATIONS[destination_name]
         data = user_data[user_id]
 
         # Prepare common kwargs for sending the message
@@ -159,10 +166,13 @@ async def send_to_destination(client, callback_query: CallbackQuery):
             "disable_web_page_preview": True
         }
 
-        # FIX: Restored the compatibility check. This only adds the 'message_thread_id'
-        # argument if the installed Pyrogram version supports it, preventing the crash.
+        # Add message_thread_id if a topic is specified and supported
         if topic_id and "message_thread_id" in Client.send_message.__code__.co_varnames:
             send_kwargs["message_thread_id"] = topic_id
+
+        # Add reply_to_message_id if a specific message to reply to is specified
+        if reply_to_message_id:
+            send_kwargs["reply_to_message_id"] = reply_to_message_id
 
         await client.send_message(**send_kwargs)
         
@@ -177,7 +187,7 @@ async def send_to_destination(client, callback_query: CallbackQuery):
             "**Please Check:**\n"
             "1. Is the bot an **admin** in the destination chat?\n"
             "2. Does it have permission to **send messages** (and manage topics)?\n"
-            "3. Is the **Chat ID** and **Topic ID** correct?"
+            "3. Are the **Chat ID**, **Topic ID**, and **Reply-to Message ID** correct?"
         )
     except Exception as e:
         await callback_query.answer(f"❌ A bot error occurred: {e}", show_alert=True)
