@@ -20,7 +20,7 @@ def index():
 pyro = Client("studysmarter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # --- Configuration ---
-ADMINS = [5199423758]
+ADMINS = [5199423758] # Replace with your actual admin user IDs
 DESTINATIONS = {
     "SSC": (-1002584962735, 8),
     "Maths Channel": (-1002637860051, None),
@@ -79,7 +79,7 @@ async def handle_link(client, message):
     except Exception as e:
         await message.reply(f"❌ An error occurred while processing the link: {e}")
 
-@pyro.on_message(filters.text & filters.private & ~filters.command(["done", "start"]))
+@pyro.on_message(filters.text & filters.private & ~filters.command(["done", "start", "chatinfo"]))
 @is_admin
 async def collect_inputs(client, message: Message):
     user_id = message.from_user.id
@@ -185,6 +185,31 @@ async def send_to_destination(client, callback_query: CallbackQuery):
     finally:
         if user_id in user_data:
             del user_data[user_id]
+
+@pyro.on_message(filters.command("chatinfo") & filters.group)
+@is_admin
+async def chat_info(client, message: Message):
+    """
+    Provides the chat ID and, if applicable, the message thread ID (topic ID)
+    for the group where the command is used.
+    """
+    chat_id = message.chat.id
+    topic_id = message.message_thread_id if message.message_thread_id else "N/A (No topic)"
+
+    response_text = (
+        f"**Chat Information:**\n"
+        f"🔗 **Chat ID:** `{chat_id}`\n"
+        f"💬 **Topic ID:** `{topic_id}`\n\n"
+        f"Use these IDs in your `DESTINATIONS` configuration."
+    )
+
+    # Reply in the same topic if available, otherwise just in the chat
+    await message.reply_text(
+        response_text,
+        parse_mode=ParseMode.MARKDOWN,
+        reply_to_message_id=message.id # Ensures reply is in the same topic if it exists
+    )
+
 
 # --- Flask and Bot Execution ---
 def run_flask():
