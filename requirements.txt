@@ -1,3 +1,6 @@
+# Pyrogram and its performance-enhancing library
 pyrogram==2.0.106
-tgcrypto
-flask
+TgCrypto==1.2.5
+
+# Web framework used in the script
+Flask==2.3.2
