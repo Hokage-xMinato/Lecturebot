@@ -1,6 +1,6 @@
 import asyncio
 import threading
-import re # <--- FIX: Imported the 're' module for case-insensitive matching
+import re
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
 from pyrogram.enums import ParseMode
@@ -56,7 +56,6 @@ async def start(client, message):
         parse_mode=ParseMode.MARKDOWN
     )
 
-# FIX: Added 'flags=re.IGNORECASE' to make the regex match URLs with "play", "Play", "PLAY", etc.
 @pyro.on_message(filters.regex(r"theeduverse\.xyz/play\?lessonurl=", flags=re.IGNORECASE))
 @is_admin
 async def handle_link(client, message):
@@ -160,9 +159,9 @@ async def send_to_destination(client, callback_query: CallbackQuery):
             "disable_web_page_preview": True
         }
 
-        # FIX: Simplified the logic. If a topic_id exists, this adds it to the
-        # arguments, ensuring the message is sent to the correct topic.
-        if topic_id:
+        # FIX: Restored the compatibility check. This only adds the 'message_thread_id'
+        # argument if the installed Pyrogram version supports it, preventing the crash.
+        if topic_id and "message_thread_id" in Client.send_message.__code__.co_varnames:
             send_kwargs["message_thread_id"] = topic_id
 
         await client.send_message(**send_kwargs)
