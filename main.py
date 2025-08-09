@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import re
+import uuid # Import for generating unique IDs
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
 from pyrogram.enums import ParseMode
@@ -17,7 +18,7 @@ def index():
     return "✅ Bot is running!"
 
 # Initialize Pyrogram Client
-pyro = Client("studysmarter_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+pyro = Client("studysmarter_bot", api_id=API_id, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # --- Configuration ---
 ADMINS = [5199423758] # Replace with your actual admin user IDs
@@ -25,15 +26,15 @@ ADMINS = [5199423758] # Replace with your actual admin user IDs
 # DESTINATIONS now include (chat_id, topic_id, reply_to_message_id)
 # Set reply_to_message_id to None if not needed for a destination.
 DESTINATIONS = {
-    "SSC": (-1002584962735, 8, None), # Example: Topic 8, no specific reply message
-    "Maths Channel": (-1002637860051, None, None), # Example: No topic, no specific reply
-    "Test Topic": (-1002143525251, 10, None), # Example: Topic 10, no specific reply
-    # NEW EXAMPLE: To reply to message 6768 in topic 8 of chat -1002584962735
-    "Aarambh Batch Reply": (-1002584962735, 8, 6768),
+    "SSC": (-1002584962735, 8, None),
+    "Maths Channel": (-1002637860051, None, None),
+    "Test Topic": (-1002143525251, 10, None),
+    "Aarambh Batch Reply": (-1002584962735, 8, 6768), # Example: replies to specific message
 }
 # --- End Configuration ---
 
-user_data = {}
+user_data = {} # Stores temporary data for the current user's block creation
+saved_blocks = {} # Stores saved blocks with their assigned IDs
 
 # --- Decorators for Authorization ---
 def is_admin(func):
@@ -84,7 +85,7 @@ async def handle_link(client, message):
     except Exception as e:
         await message.reply(f"❌ An error occurred while processing the link: {e}")
 
-@pyro.on_message(filters.text & filters.private & ~filters.command(["done", "start", "chatinfo"]))
+@pyro.on_message(filters.text & filters.private & ~filters.command(["done", "start", "chatinfo", "save", "post"]))
 @is_admin
 async def collect_inputs(client, message: Message):
     user_id = message.from_user.id
@@ -133,7 +134,7 @@ async def collect_inputs(client, message: Message):
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True
         )
-        await message.reply("Looks good? Send /done to choose where to post it.")
+        await message.reply("Looks good? Send /done to choose where to post it, or /save to store it.")
 
 @pyro.on_message(filters.command("done"))
 @is_admin
@@ -193,8 +194,91 @@ async def send_to_destination(client, callback_query: CallbackQuery):
         await callback_query.answer(f"❌ A bot error occurred: {e}", show_alert=True)
         await callback_query.message.edit_text(f"❗️**An unexpected error occurred:**\n\n`{e}`")
     finally:
+        # Clear user data after posting
         if user_id in user_data:
             del user_data[user_id]
+
+@pyro.on_message(filters.command("save") & filters.private)
+@is_admin
+async def save_block(client, message: Message):
+    """
+    Saves the current lecture block to local memory with a random ID.
+    Only accessible by admins.
+    """
+    user_id = message.from_user.id
+    if user_id not in user_data or not user_data[user_id].get("notes_collected"):
+        return await message.reply("❌ No complete lecture block to save. Please create one first.")
+
+    # Generate a unique, short ID
+    block_id = str(uuid.uuid4().hex[:8]) # Using first 8 chars of a UUID
+
+    # Store the entire user_data block under this ID
+    saved_blocks[block_id] = user_data[user_id]
+    
+    # Clear the current user's ephemeral data
+    del user_data[user_id]
+
+    await message.reply(
+        f"✅ Lecture block saved! Use `/post {block_id}` to post it.\n"
+        f"**Saved ID:** `{block_id}`",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+@pyro.on_message(filters.command("post") & filters.group) # Ensure /post only works in groups
+async def post_block(client, message: Message):
+    """
+    Posts a saved lecture block to the current group/topic.
+    Accessible by anyone in the group.
+    Usage: /post <assigned_id>
+    """
+    args = message.command
+    if len(args) < 2:
+        return await message.reply("Usage: `/post <assigned_id>`", reply_to_message_id=message.id)
+
+    block_id = args[1]
+    
+    if block_id not in saved_blocks:
+        return await message.reply(f"❌ Block with ID `{block_id}` not found.", reply_to_message_id=message.id)
+
+    block_data = saved_blocks[block_id]
+
+    chat_id = message.chat.id
+    # Get the current topic ID if the command is used within a topic
+    topic_id = message.message_thread_id 
+
+    # Prepare common kwargs for sending the message
+    send_kwargs = {
+        "chat_id": chat_id,
+        "text": block_data["final_text"],
+        "reply_markup": block_data["final_markup"],
+        "parse_mode": ParseMode.HTML,
+        "disable_web_page_preview": True
+    }
+
+    # Add message_thread_id if a topic is specified and supported
+    # This ensures it posts in the current topic or general chat as appropriate
+    if topic_id and "message_thread_id" in Client.send_message.__code__.co_varnames:
+        send_kwargs["message_thread_id"] = topic_id
+    
+    try:
+        # Attempt to send the message with the determined chat/topic ID
+        await client.send_message(**send_kwargs)
+        # Reply to the user's command confirming success
+        await message.reply(f"✅ Block `{block_id}` posted successfully!", reply_to_message_id=message.id)
+    except RPCError as e:
+        # Reply to the user's command with the error, ensuring it stays in context
+        await message.reply(
+            f"❌ Failed to post block `{block_id}`:\n\n"
+            f"**Error:** `{e}`\n\n"
+            "**Please Check:**\n"
+            "1. Is the bot an **admin** in this chat?\n"
+            "2. Does it have permission to **send messages** (and manage topics)?",
+            reply_to_message_id=message.id # This is the reply to the user's command
+        )
+    except Exception as e:
+        # Catch other unexpected errors and reply to the user's command
+        await message.reply(f"❗️An unexpected error occurred: `{e}`", reply_to_message_id=message.id)
+
 
 @pyro.on_message(filters.command("chatinfo") & filters.group)
 @is_admin
@@ -210,7 +294,7 @@ async def chat_info(client, message: Message):
         f"**Chat Information:**\n"
         f"🔗 **Chat ID:** `{chat_id}`\n"
         f"💬 **Topic ID:** `{topic_id}`\n\n"
-        f"Use these IDs in your `DESTINATIONS` configuration."
+        f"Use these IDs in your `DESTINATIONS` configuration or for the /post command's topic context."
     )
 
     # Reply in the same topic if available, otherwise just in the chat
