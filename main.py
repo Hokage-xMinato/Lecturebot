@@ -1,5 +1,6 @@
 import asyncio
 import threading
+import re # <--- FIX: Imported the 're' module for case-insensitive matching
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
 from pyrogram.enums import ParseMode
@@ -55,7 +56,8 @@ async def start(client, message):
         parse_mode=ParseMode.MARKDOWN
     )
 
-@pyro.on_message(filters.regex(r"theeduverse\.xyz/play\?lessonurl="))
+# FIX: Added 'flags=re.IGNORECASE' to make the regex match URLs with "play", "Play", "PLAY", etc.
+@pyro.on_message(filters.regex(r"theeduverse\.xyz/play\?lessonurl=", flags=re.IGNORECASE))
 @is_admin
 async def handle_link(client, message):
     try:
@@ -149,17 +151,18 @@ async def send_to_destination(client, callback_query: CallbackQuery):
         chat_id, topic_id = DESTINATIONS[destination_name]
         data = user_data[user_id]
 
-        # Prepare common kwargs
-        send_kwargs = dict(
-            chat_id=chat_id,
-            text=data["final_text"],
-            reply_markup=data["final_markup"],
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True
-        )
+        # Prepare common kwargs for sending the message
+        send_kwargs = {
+            "chat_id": chat_id,
+            "text": data["final_text"],
+            "reply_markup": data["final_markup"],
+            "parse_mode": ParseMode.HTML,
+            "disable_web_page_preview": True
+        }
 
-        # Only add message_thread_id if supported by current Pyrogram version
-        if topic_id and "message_thread_id" in Client.send_message.__code__.co_varnames:
+        # FIX: Simplified the logic. If a topic_id exists, this adds it to the
+        # arguments, ensuring the message is sent to the correct topic.
+        if topic_id:
             send_kwargs["message_thread_id"] = topic_id
 
         await client.send_message(**send_kwargs)
@@ -174,7 +177,7 @@ async def send_to_destination(client, callback_query: CallbackQuery):
             f"**Error:** `{e}`\n\n"
             "**Please Check:**\n"
             "1. Is the bot an **admin** in the destination chat?\n"
-            "2. Does it have permission to **send messages**?\n"
+            "2. Does it have permission to **send messages** (and manage topics)?\n"
             "3. Is the **Chat ID** and **Topic ID** correct?"
         )
     except Exception as e:
