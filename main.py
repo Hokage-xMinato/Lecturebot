@@ -1,4 +1,3 @@
-import asyncio
 import threading
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
@@ -150,22 +149,44 @@ async def send_to_destination(client, callback_query: CallbackQuery):
         chat_id, topic_id = DESTINATIONS[destination_name]
         data = user_data[user_id]
 
-        await client.send_message(
+        send_kwargs = dict(
             chat_id=chat_id,
             text=data["final_text"],
             reply_markup=data["final_markup"],
             parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True,
-            message_thread_id=topic_id if topic_id else None
+            disable_web_page_preview=True
         )
+
+        # Only add message_thread_id if valid topic_id (int) is provided
+        if topic_id and isinstance(topic_id, int):
+            send_kwargs["message_thread_id"] = topic_id
+
+        try:
+            await client.send_message(**send_kwargs)
+        except TypeError as e:
+            # In case message_thread_id is invalid for this chat (e.g. channel), retry without it
+            if "message_thread_id" in send_kwargs:
+                send_kwargs.pop("message_thread_id", None)
+                await client.send_message(**send_kwargs)
+            else:
+                raise e
 
         await callback_query.answer(f"✅ Posted to {destination_name}!", show_alert=True)
         await callback_query.message.edit_text(f"✅ Message sent to **{destination_name}**.")
 
     except RPCError as e:
         await callback_query.answer(f"❌ Telegram API Error: {e}", show_alert=True)
+        await callback_query.message.edit_text(
+            f"❗️**Failed to send to {destination_name}**\n\n"
+            f"**Error:** `{e}`\n\n"
+            "**Please Check:**\n"
+            "1. Is the bot an **admin** in the destination chat?\n"
+            "2. Does it have permission to **send messages**?\n"
+            "3. Is the **Chat ID** and **Topic ID** correct?"
+        )
     except Exception as e:
         await callback_query.answer(f"❌ Bot error: {e}", show_alert=True)
+        await callback_query.message.edit_text(f"❗️**An unexpected error occurred:**\n\n`{e}`")
     finally:
         user_data.pop(user_id, None)
 
